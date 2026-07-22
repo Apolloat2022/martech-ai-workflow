@@ -1,0 +1,9 @@
+# Long lines are expected in tables and Mermaid diagrams; line-length rule is not useful here.
+MD013: false
+# Inline HTML occasionally needed for details/summary blocks in long docs.
+MD033: false
+# Repo uses numeric ADR/deliverable filename prefixes (e.g. 01-, 0001-) rather than heading-derived slugs.
+MD024:
+  siblings_only: true
+# Tables throughout the repo use standard space-padded GFM style, not the rule's "compact" default.
+MD060: false

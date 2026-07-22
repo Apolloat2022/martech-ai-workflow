@@ -1,0 +1,11 @@
+openapi: 3.1.0
+info:
+  title: MAWO Agent Gateway API
+  version: 0.0.0
+  description: >
+    Fictional reference scenario authored as an architecture portfolio piece.
+    Not a record of a client engagement.
+    Placeholder spec — full definition authored in Deliverable D6
+    (see PROJECT_PLAN.md, Phase 1, Step 3). Endpoints: invoke, stream,
+    feedback, health.
+paths: {}
