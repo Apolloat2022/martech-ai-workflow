@@ -1,11 +1,340 @@
 openapi: 3.1.0
 info:
   title: MAWO Agent Gateway API
-  version: 0.0.0
+  version: 1.0.0
   description: >
     Fictional reference scenario authored as an architecture portfolio piece.
     Not a record of a client engagement.
-    Placeholder spec — full definition authored in Deliverable D6
-    (see PROJECT_PLAN.md, Phase 1, Step 3). Endpoints: invoke, stream,
-    feedback, health.
-paths: {}
+
+
+    Agent gateway for MRG's three marketing AI use cases: UC-1 (claims &
+    brand pre-screen), UC-2 (localization claims consistency check), and
+    UC-3 (performance readout synthesis). See docs/06-interface-spec.md
+    for auth, idempotency, error taxonomy, versioning, and tenancy policy
+    - this file defines the wire format only.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/invoke:
+    post:
+      operationId: invoke
+      summary: Single-shot request for UC-1, UC-2, or UC-3
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvokeRequest"
+      responses:
+        "200":
+          description: Completed synchronously - retrieval, inference, and policy check all ran
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvokeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          $ref: "#/components/responses/UpstreamProviderError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/stream:
+    post:
+      operationId: invokeStream
+      summary: Streaming variant of invoke, for UC-1's interactive drafting use
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvokeRequest"
+      responses:
+        "200":
+          description: Server-Sent Events stream of partial output, terminated by a final event carrying the same fields as InvokeResponse
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/feedback:
+    post:
+      operationId: submitFeedback
+      summary: Record a human reviewer's agree/override decision on a policy verdict
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackRequest"
+      responses:
+        "204":
+          description: Feedback recorded
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/health:
+    get:
+      operationId: health
+      summary: Liveness/readiness, reporting retrieval and model-provider status separately
+      security: []
+      responses:
+        "200":
+          description: Gateway is reachable - see body for whether dependencies are healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Service-issued API key, one per consuming system. See docs/06-interface-spec.md "Auth model".
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Client-generated UUID. Gateway caches the response for 24h keyed on (idempotency_key, use_case).
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    UseCase:
+      type: string
+      enum:
+        - claims_brand_prescreen
+        - localization_claims_check
+        - performance_readout_synthesis
+
+    InvokeRequest:
+      type: object
+      required: [use_case, submitted_by, input]
+      properties:
+        use_case:
+          $ref: "#/components/schemas/UseCase"
+        submitted_by:
+          type: string
+          description: Identity claim asserted by the calling system - not verified by the gateway itself.
+        input:
+          description: >
+            Shape depends on the sibling use_case field: ClaimsBrandPrescreenInput
+            for claims_brand_prescreen, LocalizationClaimsCheckInput for
+            localization_claims_check, PerformanceReadoutSynthesisInput for
+            performance_readout_synthesis.
+          oneOf:
+            - $ref: "#/components/schemas/ClaimsBrandPrescreenInput"
+            - $ref: "#/components/schemas/LocalizationClaimsCheckInput"
+            - $ref: "#/components/schemas/PerformanceReadoutSynthesisInput"
+
+    ClaimsBrandPrescreenInput:
+      type: object
+      required: [creative_text, brief_id]
+      properties:
+        creative_text:
+          type: string
+        brief_id:
+          type: string
+        product_ids:
+          type: array
+          items:
+            type: string
+          description: PIM product IDs the creative makes claims about, if any.
+
+    LocalizationClaimsCheckInput:
+      type: object
+      required: [localized_text, source_text, market_code, brief_id]
+      properties:
+        localized_text:
+          type: string
+        source_text:
+          type: string
+          description: The already-cleared master-market copy this localization was derived from.
+        market_code:
+          type: string
+          description: ISO 3166-1 alpha-2 market code.
+        brief_id:
+          type: string
+
+    PerformanceReadoutSynthesisInput:
+      type: object
+      required: [cycle_id, segment_ids]
+      properties:
+        cycle_id:
+          type: string
+        segment_ids:
+          type: array
+          items:
+            type: string
+          description: Segment IDs from the lifecycle-segment-feed contract to summarize.
+
+    InvokeResponse:
+      type: object
+      required: [request_id, use_case, retrieved_doc_ids, policy_verdict, output, trace]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        use_case:
+          $ref: "#/components/schemas/UseCase"
+        retrieved_doc_ids:
+          type: array
+          items:
+            type: string
+          description: >
+            asset_id values from the dam-asset-feed contract (UC-1, UC-2),
+            or segment_id values from the lifecycle-segment-feed contract
+            (UC-3). No other identifier shape is returned.
+        policy_verdict:
+          $ref: "#/components/schemas/PolicyVerdict"
+        output:
+          type: object
+          description: Use-case-specific result payload (flagged phrases and rationale for UC-1/UC-2, narrative text for UC-3).
+        trace:
+          $ref: "#/components/schemas/TraceInfo"
+
+    PolicyVerdict:
+      type: object
+      required: [status, reasons]
+      properties:
+        status:
+          type: string
+          enum: [clear, flagged_for_review, blocked]
+        reasons:
+          type: array
+          items:
+            type: string
+
+    TraceInfo:
+      type: object
+      required: [stage_timings_ms, model, model_version]
+      properties:
+        stage_timings_ms:
+          type: object
+          description: Map of stage name (network_in, retrieval, rerank, inference, policy_check, network_out) to milliseconds.
+          additionalProperties:
+            type: number
+        model:
+          type: string
+        model_version:
+          type: string
+
+    FeedbackRequest:
+      type: object
+      required: [request_id, verdict_outcome, reviewer_id]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        verdict_outcome:
+          type: string
+          enum: [upheld, overridden]
+        reviewer_id:
+          type: string
+        notes:
+          type: string
+
+    HealthResponse:
+      type: object
+      required: [status, retrieval_index_status, model_provider_status]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, down]
+        retrieval_index_status:
+          type: string
+          enum: [ok, degraded, down]
+        model_provider_status:
+          type: string
+          enum: [ok, degraded, down]
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id, retriable]
+          properties:
+            code:
+              type: string
+              enum:
+                - validation_error
+                - unsupported_use_case
+                - unauthorized
+                - rate_limited
+                - retrieval_unavailable
+                - upstream_provider_error
+                - policy_engine_error
+                - internal_error
+            message:
+              type: string
+            request_id:
+              type: string
+              format: uuid
+            retriable:
+              type: boolean
+
+  responses:
+    BadRequest:
+      description: Request failed schema validation, or use_case is not one of the supported values
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: Caller exceeded its rate allocation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    UpstreamProviderError:
+      description: Model provider call failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ServiceUnavailable:
+      description: Retrieval degraded, or policy engine unreachable (non-retriable in the latter case - see docs/06-interface-spec.md)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: Unclassified gateway fault
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
