@@ -1,4 +1,100 @@
 # Fictional reference scenario authored as an architecture portfolio piece. Not a record of a client engagement.
 #
-# Placeholder — data contract authored in Deliverable D5
-# (see PROJECT_PLAN.md, Phase 1, Step 3).
+# Data contract: lifecycle segment feed. Feeds the metrics store
+# behind UC-3 (Performance Readout Synthesis). Deliberately excludes
+# row-level customer records - see docs/05-data-pipelines.md.
+
+contract:
+  name: lifecycle-segment-feed
+  version: 1.0.0
+  status: draft
+  description: >
+    Aggregated, non-PII lifecycle/CRM segment definitions and
+    performance counts, consumed by UC-3. This contract's entire
+    purpose is to define an aggregation boundary that guarantees no
+    row-level, individually-identifying data crosses into it.
+  owner:
+    team: Lifecycle/CRM (system of record) / Analytics (aggregation logic) / Data Engineering (pipeline)
+    contact: lifecycle-crm-data@mrg.example (fictional)
+  consumers:
+    - performance-synthesis-service (Agent Gateway platform, UC-3)
+  source_system: "S3 - CRM/Lifecycle platform + S4 - CDP (see docs/03-data-landscape.md); pre-aggregated before this contract's boundary"
+  pii: false
+  classification: internal
+  pii_note: >
+    S3 and S4 are PII-flagged at the source. This contract defines the
+    aggregation boundary that keeps that PII from ever crossing into
+    the metrics store - see quality_guarantees for the enforced
+    minimum-count rule that backs this claim technically, not just
+    procedurally.
+
+delivery:
+  mode: batch
+  cadence: daily, 06:00 UTC (after S3/S4's own overnight batch cycles complete)
+  format: JSON over REST (pull), staged to object storage per D4's deployment view
+
+schema:
+  - field: segment_id
+    type: string
+    required: true
+    description: Lifecycle/CRM segment identifier - definitional, not a customer list.
+  - field: segment_name
+    type: string
+    required: true
+  - field: segment_definition_summary
+    type: string
+    required: true
+    description: >
+      Human-authored rule summary (e.g. "opted-in, purchased in last
+      90 days, region=EU"), reviewed at segment creation - not
+      generated from the underlying query, to avoid leaking query
+      logic that could aid re-identification.
+  - field: market_code
+    type: string
+    required: true
+  - field: reachable_count
+    type: integer
+    required: false
+    description: >
+      Count of consented, reachable members. The field is omitted
+      entirely (not set to zero) when the underlying segment has
+      fewer than 50 consented members - see quality_guarantees.
+  - field: channel_engagement_summary
+    type: object
+    required: true
+    properties:
+      - field: channel
+        type: string
+        enum: [email, web, paid_social, in_store]
+      - field: send_count
+        type: integer
+      - field: engagement_rate
+        type: number
+        description: Aggregate rate, never tied to any individual member.
+  - field: as_of_date
+    type: string
+    format: date (ISO 8601)
+    required: true
+
+sla:
+  freshness: available by 08:00 UTC daily, 2 hours after the 06:00 UTC batch cadence
+  availability: 99% monthly - a single missed batch day is a quality incident, not an availability breach, per quality_guarantees below
+  support: business hours, next-business-day response; a missed daily batch not recovered within 24 hours escalates to Data Engineering on-call
+
+breaking_change_policy:
+  versioning: semantic versioning; a MAJOR bump is required for any field removal, type change, or change to the suppression threshold below
+  notice_period: >
+    30 calendar days' notice to registered consumers, plus explicit
+    sign-off from Legal & Compliance for any change touching the
+    suppression threshold or the aggregation granularity.
+  deprecation_window: the prior MAJOR version stays available for 60 days after a new version ships
+  emergency_exception: >
+    none for this contract. Changes affecting the PII boundary do not
+    get an expedited path, even under legal urgency - an urgent legal
+    need is handled as an incident against the source systems, not by
+    loosening this contract's guarantees.
+
+quality_guarantees:
+  - "no field in this schema, under any version, may carry an individually-identifying value - a change proposing one is a new contract, not a version bump, and requires Legal & Compliance sign-off before it can even be drafted."
+  - reachable_count and every per-segment metric is suppressed (the field is omitted) rather than published when the underlying segment has fewer than 50 consented members, to prevent re-identification of small segments.
+  - segment_definition_summary is a human-authored description reviewed at segment creation, not generated from the query text.

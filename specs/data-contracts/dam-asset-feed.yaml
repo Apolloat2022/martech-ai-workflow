@@ -1,4 +1,92 @@
 # Fictional reference scenario authored as an architecture portfolio piece. Not a record of a client engagement.
 #
-# Placeholder — data contract authored in Deliverable D5
-# (see PROJECT_PLAN.md, Phase 1, Step 3).
+# Data contract: DAM asset feed. Feeds the retrieval index behind
+# UC-1 (Claims & Brand Pre-Screen Assistant) and UC-2 (Localization
+# Claims Consistency Checker). See docs/05-data-pipelines.md.
+
+contract:
+  name: dam-asset-feed
+  version: 1.0.0
+  status: draft
+  description: >
+    Creative asset metadata and claims tags emitted by the DAM (S2) on
+    ingestion, consumed by the retrieval pipeline behind UC-1 and UC-2.
+  owner:
+    team: Brand (system of record) / Data Engineering (pipeline)
+    contact: brand-dam-owners@mrg.example (fictional)
+  consumers:
+    - retrieval-ingestion-service (Agent Gateway platform)
+  source_system: "S2 - DAM (see docs/03-data-landscape.md)"
+  pii: false
+  classification: internal
+
+delivery:
+  mode: event-driven
+  trigger: DAM publish webhook (fires when an asset is approved and tagged)
+  fallback: hourly reconciliation poll against the DAM API - the webhook is at-least-once, not guaranteed-delivery
+  format: JSON over HTTPS POST (webhook); JSON over REST (reconciliation poll)
+
+schema:
+  - field: asset_id
+    type: string
+    required: true
+    description: DAM-native unique identifier for the asset. Globally unique and immutable for the asset's life.
+  - field: asset_type
+    type: string
+    required: true
+    enum: [image, video, layered_source, document]
+  - field: title
+    type: string
+    required: true
+  - field: brand_claims_tags
+    type: array[string]
+    required: true
+    description: >
+      Structured claims tags applied at brand review (e.g. "organic",
+      "clinically-tested"). An empty array means no claims tags were
+      applied - upstream must never omit this field to mean "unknown".
+  - field: market_variants
+    type: array[object]
+    required: false
+    description: One entry per localized variant that exists at time of ingestion.
+    properties:
+      - field: market_code
+        type: string
+        description: ISO 3166-1 alpha-2 market code.
+      - field: variant_asset_id
+        type: string
+  - field: rights_usage_window
+    type: object
+    required: true
+    properties:
+      - field: usage_start
+        type: string
+        format: date (ISO 8601)
+      - field: usage_end
+        type: string
+        format: date (ISO 8601)
+        nullable: true
+  - field: source_last_modified
+    type: string
+    format: date-time (ISO 8601)
+    required: true
+
+sla:
+  freshness: event delivered within 5 minutes of the DAM publish event; reconciliation poll closes any webhook gap within 60 minutes
+  availability: 99.5% monthly - matches the DAM platform's own published SLA; this contract cannot promise better availability than its source
+  support: business hours (MRG primary region); next-business-day response for contract-breaking incidents
+
+breaking_change_policy:
+  versioning: semantic versioning on the contract; a MAJOR bump is required for any field removal, type change, or new required field
+  notice_period: 30 calendar days' notice to all registered consumers before a MAJOR version ships, posted to the data-contracts registry
+  deprecation_window: the prior MAJOR version stays available for 60 days after a new version ships
+  emergency_exception: >
+    a breaking change may ship with less than 30 days' notice only to satisfy
+    an active legal/compliance requirement (e.g. a claims tag must be removed
+    for regulatory reasons) - and must be logged as an incident regardless
+    of the reason.
+
+quality_guarantees:
+  - asset_id is globally unique and immutable for the life of the asset.
+  - brand_claims_tags reflects the state at last brand-review sign-off, not a live or unreviewed draft state.
+  - "no row-level customer or PII data is present in this feed under any schema version - a future version proposing to add PII requires a new contract, not a version bump."
