@@ -1,0 +1,15 @@
+# Fictional reference scenario authored as an architecture portfolio piece. Not a record of a client engagement.
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+COPY src ./src
+COPY corpus ./corpus
+
+RUN pip install --no-cache-dir .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "mawo.gateway:app", "--host", "0.0.0.0", "--port", "8000"]

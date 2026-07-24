@@ -1,0 +1,18 @@
+# Fictional reference scenario authored as an architecture portfolio piece. Not a record of a client engagement.
+#
+# One service, deliberately - see ADR/D4 "no standalone vector store
+# container": retrieval is in-memory cosine similarity over a tiny corpus,
+# not a separate database, so there is nothing else to bring up.
+
+services:
+  gateway:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - trace-db:/app/data
+
+volumes:
+  trace-db:
