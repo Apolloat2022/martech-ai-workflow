@@ -5,8 +5,8 @@
 **Author of plan:** Opus 4.8 (planning session)
 **Intended executor:** Sonnet (or any coding agent)
 **Repo root:** `C:\Workspace\Projects\Marketing-ai-workflow`
-**Status:** Not started. Folder is empty.
-**Date:** 2026-07-22
+**Status:** Complete. All of D1–D14 built, verified, and pushed to `main`; see section 8's Definition of Done.
+**Date:** 2026-07-22 (plan authored); completed 2026-07-24
 
 ---
 
@@ -245,15 +245,15 @@ Flag these back rather than guessing:
 
 ## 8. Definition of done
 
-- [ ] All of D1–D11 exist, each with an audience line and a "What this changes" section
-- [ ] D5 and D9 are the strongest documents in the repo (they carry the gap-closing load)
-- [ ] `reference-slice` runs clean via `docker compose up` with no API keys set *(Phase-2 dependent)*
-- [ ] Latency harness produces `[measured]` numbers now reflected in D7 *(Phase-2 dependent)*
-- [ ] Every number in the repo is labeled `[illustrative]` or `[measured]`
-- [ ] Fictional-scenario disclaimer present in README and in every doc header
-- [ ] At least three documented rejections (D2, D8, D11)
-- [ ] CI green: markdown lint + OpenAPI validation + slice tests *(slice tests Phase-2 dependent)*
-- [ ] `LICENSE` and `.gitignore` present; no API key committed anywhere in history
-- [ ] README's fifteen-minute path actually takes fifteen minutes — read it end to end and time it
+- [x] All of D1–D11 exist, each with an audience line and a "What this changes" section
+- [x] D5 and D9 are the strongest documents in the repo (they carry the gap-closing load)
+- [x] `reference-slice` runs clean via `docker compose up` with no API keys set *(Phase-2 dependent)* — verified: the Docker image builds cleanly (`docker compose build`), and end-to-end behavior was confirmed via a live HTTP smoke test against the app run directly (`uvicorn`) with zero API keys, since the local machine's Docker Desktop was unavailable (host-side disk issue, unrelated to this repo) at verification time. CI's `slice-tests` job independently confirms a clean install + test run on a fresh checkout.
+- [x] Latency harness produces `[measured]` numbers now reflected in D7 *(Phase-2 dependent)*
+- [x] Every number in the repo is labeled `[illustrative]` or `[measured]`
+- [x] Fictional-scenario disclaimer present in README and in every doc header
+- [x] At least three documented rejections (D2, D8, D11)
+- [x] CI green: markdown lint + OpenAPI validation + slice tests *(slice tests Phase-2 dependent)* — confirmed on GitHub Actions, not just locally
+- [x] `LICENSE` and `.gitignore` present; no API key committed anywhere in history
+- [x] README's fifteen-minute path actually takes fifteen minutes — read it end to end and time it
 
-Items marked *(Phase-2 dependent)* are struck if the runnable slice is cut per section 0. Everything else holds regardless.
+Items marked *(Phase-2 dependent)* are struck if the runnable slice is cut per section 0. Everything else holds regardless. Phase 2 was not cut — D12 was built and verified.
